@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://ntdit36.github.io/CheckinITEndYear/",
+  "homepage": "https://ntdit36.github.io/CheckinIT-EndYear2025/",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "canvas-confetti": "^1.9.2",
+    "firebase": "^10.8.0",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

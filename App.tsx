@@ -5,48 +5,75 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { GuestResult } from './components/GuestResult';
 import { Settings, Sparkles, UserPlus, QrCode, Lock, X, ShieldCheck } from 'lucide-react';
 
-// --- Constants ---
-const STORAGE_KEY = 'team-allocator-v3-numbers'; 
-const ADMIN_PIN = '2026'; 
+// --- Firebase Imports ---
+import { db } from './firebaseConfig';
+// import { ref, onValue, set } from 'firebase/database'; // Removed for compat with Firebase v8
 
-// --- Helper Functions ---
-const getInitialState = (): AppState => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (error) {
-    console.error("Lỗi đọc dữ liệu cũ, reset về mặc định:", error);
-    localStorage.removeItem(STORAGE_KEY);
-  }
-  
-  // Default State
-  return {
+// --- Constants ---
+const ADMIN_PIN = '2026'; 
+const DB_PATH = 'team-allocator-data'; // Tên nhánh dữ liệu trên Firebase
+
+const App: React.FC = () => {
+  // State mặc định
+  const [appState, setAppState] = useState<AppState>({
     guests: [],
     availableNumbers: Array.from({ length: TOTAL_CAPACITY }, (_, i) => i + 1),
     teamCounts: ALL_TEAMS.reduce((acc, team) => ({ ...acc, [team]: 0 }), {} as Record<TeamLabel, number>),
-  };
-};
+  });
 
-const App: React.FC = () => {
-  // State
-  const [appState, setAppState] = useState<AppState>(getInitialState);
   const [view, setView] = useState<'INPUT' | 'RESULT' | 'ADMIN'>('INPUT');
   const [currentGuest, setCurrentGuest] = useState<Guest | null>(null);
   const [inputName, setInputName] = useState('');
   const [isAdminCheckin, setIsAdminCheckin] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   // Admin Auth State
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authPin, setAuthPin] = useState('');
   const [authError, setAuthError] = useState(false);
 
-  // Persist State
+  // --- KẾT NỐI FIREBASE ---
+  // Lắng nghe dữ liệu thay đổi theo thời gian thực
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-  }, [appState]);
+    // V8 Syntax
+    const dataRef = db.ref(DB_PATH);
+    
+    const handleData = (snapshot: any) => {
+      const data = snapshot.val();
+      setIsLoading(false);
+      
+      if (data) {
+        // Nếu có dữ liệu trên mạng thì tải về
+        setAppState(data);
+      } else {
+        // Nếu chưa có (lần đầu chạy), tạo dữ liệu rỗng lên mạng
+        const initialState: AppState = {
+          guests: [],
+          availableNumbers: Array.from({ length: TOTAL_CAPACITY }, (_, i) => i + 1),
+          teamCounts: ALL_TEAMS.reduce((acc, team) => ({ ...acc, [team]: 0 }), {} as Record<TeamLabel, number>),
+        };
+        dataRef.set(initialState);
+        setAppState(initialState);
+      }
+    };
+
+    dataRef.on('value', handleData);
+
+    // Hủy lắng nghe khi thoát app
+    return () => {
+      dataRef.off('value', handleData);
+    };
+  }, []);
+
+  // Hàm lưu dữ liệu lên Firebase
+  const saveToFirebase = (newState: AppState) => {
+    // V8 Syntax
+    db.ref(DB_PATH).set(newState).catch((err: any) => {
+      console.error("Lỗi khi lưu Firebase:", err);
+      setError("Mất kết nối mạng! Không thể lưu dữ liệu.");
+    });
+  };
 
   // Logic: Assign Team and Number
   const assignSlot = useCallback((name: string, isForAdmin: boolean) => {
@@ -108,20 +135,22 @@ const App: React.FC = () => {
     const newGuest = assignSlot(cleanName, isAdminCheckin);
     
     if (newGuest) {
-      // Simple random slogan (No API Call)
+      // Simple random slogan
       const slogan = generateTeamSlogan(newGuest.name, newGuest.team, newGuest.raffleNumber);
       const guestWithSlogan = { ...newGuest, aiSlogan: slogan };
 
-      setAppState(prev => {
-        const newCounts = { ...prev.teamCounts };
-        newCounts[guestWithSlogan.team] += 1;
-        
-        return {
-          guests: [guestWithSlogan, ...prev.guests],
-          availableNumbers: prev.availableNumbers.filter(n => n !== guestWithSlogan.raffleNumber),
-          teamCounts: newCounts
-        };
-      });
+      // Cập nhật State mới
+      const newCounts = { ...appState.teamCounts };
+      newCounts[guestWithSlogan.team] += 1;
+      
+      const newState: AppState = {
+        guests: [guestWithSlogan, ...appState.guests],
+        availableNumbers: appState.availableNumbers.filter(n => n !== guestWithSlogan.raffleNumber),
+        teamCounts: newCounts
+      };
+
+      // Lưu lên Firebase
+      saveToFirebase(newState);
 
       setCurrentGuest(guestWithSlogan);
       setView('RESULT');
@@ -131,72 +160,73 @@ const App: React.FC = () => {
   };
 
   const handleResetData = () => {
-    setAppState({
+    const newState: AppState = {
       guests: [],
       availableNumbers: Array.from({ length: TOTAL_CAPACITY }, (_, i) => i + 1),
       teamCounts: ALL_TEAMS.reduce((acc, team) => ({ ...acc, [team]: 0 }), {} as Record<TeamLabel, number>),
-    });
+    };
+    saveToFirebase(newState);
     setCurrentGuest(null);
     setView('INPUT');
   };
 
   const handleDeleteGuest = (guestId: string) => {
-    setAppState(prev => {
-      const guestToDelete = prev.guests.find(g => g.id === guestId);
-      if (!guestToDelete) return prev;
+    const guestToDelete = appState.guests.find(g => g.id === guestId);
+    if (!guestToDelete) return;
 
-      const newCounts = { ...prev.teamCounts };
-      if (newCounts[guestToDelete.team] > 0) {
-        newCounts[guestToDelete.team] -= 1;
-      }
+    const newCounts = { ...appState.teamCounts };
+    if (newCounts[guestToDelete.team] > 0) {
+      newCounts[guestToDelete.team] -= 1;
+    }
 
-      const newAvailableNumbers = [...prev.availableNumbers, guestToDelete.raffleNumber].sort((a, b) => a - b);
+    const newAvailableNumbers = [...appState.availableNumbers, guestToDelete.raffleNumber].sort((a, b) => a - b);
 
-      return {
-        guests: prev.guests.filter(g => g.id !== guestId),
-        availableNumbers: newAvailableNumbers,
-        teamCounts: newCounts
-      };
-    });
+    const newState: AppState = {
+      guests: appState.guests.filter(g => g.id !== guestId),
+      availableNumbers: newAvailableNumbers,
+      teamCounts: newCounts
+    };
+
+    saveToFirebase(newState);
   };
 
   const handleUpdateGuest = (guestId: string, newName: string, newTeam: TeamLabel, newRaffleNumber: number) => {
-    setAppState(prev => {
-      const guestToUpdate = prev.guests.find(g => g.id === guestId);
-      if (!guestToUpdate) return prev;
+    const guestToUpdate = appState.guests.find(g => g.id === guestId);
+    if (!guestToUpdate) return;
 
-      const newCounts = { ...prev.teamCounts };
-      let newAvailableNumbers = [...prev.availableNumbers];
-      
-      if (guestToUpdate.team !== newTeam) {
-        newCounts[guestToUpdate.team] -= 1;
-        newCounts[newTeam] += 1;
+    const newCounts = { ...appState.teamCounts };
+    let newAvailableNumbers = [...appState.availableNumbers];
+    
+    if (guestToUpdate.team !== newTeam) {
+      newCounts[guestToUpdate.team] -= 1;
+      newCounts[newTeam] += 1;
+    }
+
+    let finalNumber = guestToUpdate.raffleNumber;
+    if (newRaffleNumber !== guestToUpdate.raffleNumber) {
+      if (newAvailableNumbers.includes(newRaffleNumber)) {
+          newAvailableNumbers = newAvailableNumbers.filter(n => n !== newRaffleNumber);
+          newAvailableNumbers.push(guestToUpdate.raffleNumber);
+          newAvailableNumbers.sort((a, b) => a - b);
+          finalNumber = newRaffleNumber;
       }
+    }
 
-      let finalNumber = guestToUpdate.raffleNumber;
-      if (newRaffleNumber !== guestToUpdate.raffleNumber) {
-        if (newAvailableNumbers.includes(newRaffleNumber)) {
-           newAvailableNumbers = newAvailableNumbers.filter(n => n !== newRaffleNumber);
-           newAvailableNumbers.push(guestToUpdate.raffleNumber);
-           newAvailableNumbers.sort((a, b) => a - b);
-           finalNumber = newRaffleNumber;
-        }
+    const updatedGuests = appState.guests.map(g => {
+      if (g.id === guestId) {
+        return { ...g, name: newName, team: newTeam, raffleNumber: finalNumber };
       }
-
-      const updatedGuests = prev.guests.map(g => {
-        if (g.id === guestId) {
-          return { ...g, name: newName, team: newTeam, raffleNumber: finalNumber };
-        }
-        return g;
-      });
-
-      return {
-        ...prev,
-        guests: updatedGuests,
-        teamCounts: newCounts,
-        availableNumbers: newAvailableNumbers
-      };
+      return g;
     });
+
+    const newState: AppState = {
+      ...appState,
+      guests: updatedGuests,
+      teamCounts: newCounts,
+      availableNumbers: newAvailableNumbers
+    };
+
+    saveToFirebase(newState);
   };
 
   const handleNextGuest = () => {
@@ -216,6 +246,18 @@ const App: React.FC = () => {
       setAuthPin('');
     }
   };
+
+  // --- UI RENDER ---
+
+  // Loading Screen
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center text-white">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div>Đang kết nối dữ liệu...</div>
+      </div>
+    );
+  }
 
   if (view === 'ADMIN') {
     return (
@@ -271,16 +313,27 @@ const App: React.FC = () => {
             </div>
 
             <form onSubmit={handleJoin} className={`backdrop-blur-xl border rounded-2xl p-6 shadow-2xl transition-colors ${isAdminCheckin ? 'bg-red-900/10 border-red-500/30' : 'bg-slate-800/50 border-slate-700'}`}>
-              <div className="mb-6">
+              <div className="mb-6 relative">
                 <label className="block text-sm font-medium text-slate-400 mb-2 uppercase tracking-wide">Tên của bạn</label>
-                <input
-                  type="text"
-                  value={inputName}
-                  onChange={(e) => setInputName(e.target.value)}
-                  placeholder={isAdminCheckin ? "Tên thành viên BTC" : "Ví dụ: KAKA"}
-                  className="w-full px-4 py-4 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg transition-all"
-                  autoFocus
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={inputName}
+                    onChange={(e) => setInputName(e.target.value)}
+                    placeholder={isAdminCheckin ? "Tên thành viên BTC" : "Ví dụ: KAKA"}
+                    className="w-full px-4 py-4 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg transition-all pr-10"
+                    autoFocus
+                  />
+                  {inputName && (
+                    <button 
+                      type="button"
+                      onClick={() => setInputName('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1"
+                    >
+                      <X size={20} />
+                    </button>
+                  )}
+                </div>
               </div>
               
               {error && (
