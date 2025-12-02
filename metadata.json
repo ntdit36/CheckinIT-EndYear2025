@@ -1,0 +1,5 @@
+{
+  "name": "Team Allocator",
+  "description": "A QR-ready event app that randomly assigns guests to Teams (1-10) with strict limits and unique raffle numbers (1-50).",
+  "requestFramePermissions": []
+}
