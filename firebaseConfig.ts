@@ -5,13 +5,13 @@ import "firebase/database";
 // Bước 1: Vào console.firebase.google.com -> Project Settings -> General -> Your apps
 // Bước 2: Copy object config dán vào dưới đây
 const firebaseConfig = {
-  apiKey: "AIzaSyDQYFb4jU4GM6jvNeoI2_ruaL2l40KE1-E",
-  authDomain: "eddy-2d7b9.firebaseapp.com",
-  projectId: "eddy-2d7b9",
-  storageBucket: "eddy-2d7b9.firebasestorage.app",
-  messagingSenderId: "457973266884",
-  appId: "1:457973266884:web:b07d771635523c70860c91",
-  measurementId: "G-EBGZ0TZL66"
+  apiKey: "AIzaSyBtudfLFqWZvBKZ5cr2ofzaULsz8MdOsaI",
+  authDomain: "itendyear.firebaseapp.com",
+  projectId: "itendyear",
+  storageBucket: "itendyear.firebasestorage.app",
+  messagingSenderId: "760502534464",
+  appId: "1:760502534464:web:2cb7195bae919cbcc17aa5",
+  measurementId: "G-JHNN75QZVL"
 };
 
 // Khởi tạo Firebase (kiểm tra để tránh duplicate app initialization)
@@ -20,5 +20,6 @@ const app = !firebase.apps.length ? firebase.initializeApp(firebaseConfig) : fir
 // Xuất Database để dùng trong App.tsx
 
 export const db = app.database();
+
 
 
