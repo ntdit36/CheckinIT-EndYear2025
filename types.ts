@@ -9,7 +9,7 @@ export enum TeamLabel {
   T8 = '8',
   T9 = '9',
   T10 = '10',
-  ADMIN = 'ADMIN'
+  ADMIN = 'Admin'
 }
 
 export interface Guest {
