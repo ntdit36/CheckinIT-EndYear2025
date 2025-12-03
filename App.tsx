@@ -5,8 +5,8 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { GuestResult } from './components/GuestResult';
 import { Settings, Sparkles, UserPlus, QrCode, Lock, X, ShieldCheck } from 'lucide-react';
 
-// --- Firebase Imports ---
-import { db } from './firebaseConfig';
+// // --- Firebase Imports ---
+// import { db } from './firebaseConfig';
 // import { ref, onValue, set } from 'firebase/database'; // Removed for compat with Firebase v8
 
 // --- Constants ---
