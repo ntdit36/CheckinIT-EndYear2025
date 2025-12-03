@@ -106,7 +106,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           const count = teamStats[team] || 0;
           const limit = TEAM_CAPACITIES[team];
           const isFull = count >= limit;
-          const isAdmin = team === TeamLabel.ADMIN;
+          const isAdmin = team === TeamLabel.admin;
 
           return (
             <button
